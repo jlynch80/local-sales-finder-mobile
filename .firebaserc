@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "local-sales-finder"
+  },
+  "targets": {
+    "local-sales-finder": {
+      "hosting": {
+        "rummagesale-live": [
+          "local-sales-finder"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

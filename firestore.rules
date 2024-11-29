@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is admin
+    function isAdmin() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null && userDoc.data.isAdmin == true;
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      // Allow admins to read all user documents AND list the collection
+      allow list: if request.auth != null && isAdmin();
+      allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      
+      // Allow users to create their own document
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow users to update their own document, but not their admin status
+      allow update: if request.auth != null && 
+        request.auth.uid == userId && 
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin);
+      
+      // Allow admins to update any user's admin status
+      allow update: if request.auth != null && 
+        isAdmin() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAdmin']);
+      
+      // Allow users to delete their own document
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Event types collection rules
+    match /eventTypes/{eventType} {
+      // Anyone can read event types
+      allow read: if true;
+      // Only admins can write to event types
+      allow write: if request.auth != null && isAdmin();
+    }
+
+    // Sales collection rules
+    match /sales/{sale} {
+      // Allow anyone to read sales
+      allow read: if true;
+      
+      // Allow anyone to list sales
+      allow list: if true;
+      
+      // Allow authenticated users to create sales with proper validation
+      allow create: if request.auth != null && 
+                   request.resource.data.userId == request.auth.uid &&
+                   request.resource.data.createdAt is timestamp &&
+                   request.resource.data.updatedAt is timestamp &&
+                   request.resource.data.status in ['live', 'ended'] &&
+                   request.resource.data.location is map &&
+                   request.resource.data.location.latitude is number &&
+                   request.resource.data.location.longitude is number &&
+                   request.resource.data.eventType is string &&
+                   request.resource.data.description is string;
+      
+      // Allow users to update their own sales
+      allow update: if request.auth != null && 
+                   resource.data.userId == request.auth.uid &&
+                   request.resource.data.userId == request.auth.uid &&
+                   request.resource.data.updatedAt is timestamp;
+      
+      // Allow users to delete their own sales
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Allow admins to update or delete any sale
+      allow update, delete: if request.auth != null && isAdmin();
+    }
+    
+    // Default rule - deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
